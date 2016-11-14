@@ -1,4 +1,4 @@
-package cn.com.dareway.dwlibrary.netutils.okhttp;
+package cn.com.dareway.dwlibrary.netutils.httputils;
 
 /**
  * Created by Administrator on 2016/11/14.

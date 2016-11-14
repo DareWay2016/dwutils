@@ -34,15 +34,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import cn.com.dareway.dwlibrary.netutils.okhttp.IOParam;
+import cn.com.dareway.dwlibrary.dwutils.NetUtils;
+import cn.com.dareway.dwlibrary.netutils.httputils.IOParam;
 
 /**
  * This is okhttp util
  */
 @SuppressWarnings("ALL")
-public final class Util {
+public final class FileUtils {
 
-    private static final String LOG_TAG = "NetUtils";
 
     public static <T> T[] listToParams(List<T> params, Class<T> tClass) {
         if (params == null || params.size() == 0)
@@ -118,25 +118,6 @@ public final class Util {
         }
         return file;
     }
-
-    // Show log
-    public static void log(String msg) {
-        if (NetUtils.DEBUG && !TextUtils.isEmpty(msg))
-            Log.d(LOG_TAG, msg);
-    }
-
-    public static void log(String fromat, Object... strs) {
-        if (NetUtils.DEBUG && !TextUtils.isEmpty(fromat) && strs != null)
-            Log.d(LOG_TAG, String.format(fromat, strs));
-    }
-
-
-
-    public static void log(String msg, Throwable tr) {
-        if (NetUtils.DEBUG && !TextUtils.isEmpty(msg))
-            Log.d(LOG_TAG, msg, tr);
-    }
-
 
     /**
      * 判断对象是否为空

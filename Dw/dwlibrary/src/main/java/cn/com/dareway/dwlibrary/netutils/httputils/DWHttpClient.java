@@ -1,4 +1,4 @@
-package cn.com.dareway.dwlibrary.netutils.okhttp;
+package cn.com.dareway.dwlibrary.netutils.httputils;
 
 import android.os.Handler;
 import android.os.Looper;
@@ -17,11 +17,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import cn.com.dareway.dwlibrary.dwutils.LogUtils;
 import cn.com.dareway.dwlibrary.netutils.CertTool;
+import cn.com.dareway.dwlibrary.netutils.FileUtils;
 import cn.com.dareway.dwlibrary.netutils.GsonResolver;
-import cn.com.dareway.dwlibrary.netutils.Util;
 import cn.com.dareway.dwlibrary.netutils.factory.CookieCallBack;
-import cn.com.dareway.dwlibrary.netutils.factory.NetHttpClient;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Cookie;
@@ -44,7 +44,7 @@ import okhttp3.ResponseBody;
  * 使用OkHttp的版本为 okhttp:3.3.1
  */
 
-public class OkClient {
+public class DWHttpClient {
 
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
     private static OkHttpClient client;
@@ -59,6 +59,9 @@ public class OkClient {
     private static CookieJar cookieJar;
     private static Map<String, String> headers;
 
+    /**
+     * 取消所有的网络请求
+     */
     public static void cancelCall() {
         if (calls != null) {
             for (Call c :
@@ -72,7 +75,13 @@ public class OkClient {
         }
     }
 
-
+    /**
+     * 初始化请求配置
+     * @param certInputStream
+     * @param connectTime
+     * @param writeTime
+     * @param readTime
+     */
     public static void init(InputStream certInputStream, int connectTime, int writeTime, int readTime) {
         cert = certInputStream;
         calls = new ArrayList<>();
@@ -117,16 +126,25 @@ public class OkClient {
 
     }
 
+    /**
+     * 添加header
+     * @param header
+     */
     public static void setHeader(Map<String, String> header) {
         headers = header;
     }
 
-    public static void init(OkHttpClient httpClient) {
-        client = httpClient;
-    }
+//    public static void init(OkHttpClient httpClient) {
+//        client = httpClient;
+//    }
 
-    public static NetHttpClient setCertInputStream(InputStream certInputStream) {
-        return null;
+    /**
+     * 添加证书
+     * @param certInputStream
+     */
+    public static void setCertInputStream(InputStream certInputStream) {
+        cert=certInputStream;
+        init(cert,connectTimeOut,writeTimeOut,readTimeOut);
     }
 
     /**
@@ -142,7 +160,7 @@ public class OkClient {
 
     public static <T> Call doHttpPost(String url, String headerName, HashMap<String, String> paras, HttpCallBack<T> callBack) {
 
-        if (!Util.isNotNull(callBack)) {
+        if (!FileUtils.isNotNull(callBack)) {
             //不能为空
             return null;
         }
@@ -185,7 +203,7 @@ public class OkClient {
 
     public static <T> Call doHttpPost(String url, String headerName, String json, HttpCallBack<T> callBack) {
 
-        if (!Util.isNotNull(callBack)) {
+        if (!FileUtils.isNotNull(callBack)) {
             //不能为空
             return null;
         }
@@ -283,7 +301,7 @@ public class OkClient {
 
     public static <T> Call doHttpGet(String url, String headerName, HttpCallBack<T> callBack) {
 
-        if (!Util.isNotNull(callBack)) {
+        if (!FileUtils.isNotNull(callBack)) {
             //不能为空
             return null;
         }
@@ -377,10 +395,10 @@ public class OkClient {
         final File file = new File(fileStr);
         try {
             // On before crete stream, we need make new file
-            Util.makeFile(file);
+            FileUtils.makeFile(file);
 
             final FileOutputStream out = new FileOutputStream(file);
-            if (!Util.isNotNull(callBack)) {
+            if (!FileUtils.isNotNull(callBack)) {
                 //不能为空
                 return null;
             }
@@ -421,7 +439,7 @@ public class OkClient {
                     InputStream in = null;
                     byte[] buf = new byte[mBufferSize];
                     try {
-                        Util.log("onResponse:Code:%d Stream:" + response.code());
+                        LogUtils.log("onResponse:Code:%d Stream:" + response.code());
 
                         ResponseBody body = response.body();
                         bindResponseProgressCallback(request.body(), body, callBack);
@@ -441,7 +459,7 @@ public class OkClient {
                         });
 
                     } catch (Exception e) {
-                        //   Util.log("onResponse Failure:" + response.request().toString());
+                        //   FileUtils.log("onResponse Failure:" + response.request().toString());
                         handler.post(new Runnable() {
                             @Override
                             public void run() {
@@ -463,17 +481,28 @@ public class OkClient {
         return call;
     }
 
-
+    /**
+     * 设置连接时长
+     * @param time
+     */
     public static void connectTimeOut(int time) {
         connectTimeOut = time;
 
     }
 
+    /**
+     * 设置写入数据的时长
+     * @param time
+     */
     public static void writerTimeOut(int time) {
         writeTimeOut = time;
 
     }
 
+    /**
+     * 设置读取数据的时长
+     * @param time
+     */
     public static void readTimeOut(int time) {
         readTimeOut = time;
 
@@ -503,12 +532,12 @@ public class OkClient {
             @Override
             public void onFailure(Call call, IOException e) {
                 if (call.isCanceled()) {
-                    Util.log("onFailure" + e.toString());
+                    LogUtils.log("onFailure" + e.toString());
                     calls.remove(call);
                 } else {
                     call.cancel();
                     calls.remove(call);
-                    Util.log("onFailure" + e.toString());
+                    LogUtils.log("onFailure" + e.toString());
                     handler.post(new Runnable() {
                         @Override
                         public void run() {
@@ -523,7 +552,7 @@ public class OkClient {
             public void onResponse(Call call, final Response response) throws IOException {
                 call.cancel();
                 calls.remove(call);
-                Util.log("onResponse");
+                LogUtils.log("onResponse");
                 if (headerName != null && !"".equals(headerName)) {
                     callBack.onHeader(response.headers(headerName));
                 }
@@ -576,11 +605,11 @@ public class OkClient {
             for (IOParam param : IOParams) {
                 if (param.key != null && param.file != null) {
                     String fileName = param.file.getName();
-                    RequestBody fileBody = RequestBody.create(MediaType.parse(Util.getFileMimeType(fileName)), param.file);
+                    RequestBody fileBody = RequestBody.create(MediaType.parse(FileUtils.getFileMimeType(fileName)), param.file);
                     builder.addFormDataPart(param.key, fileName, fileBody);
-                    Util.log("buildMultiFileParam: key: " + param.key + " value: " + fileName);
+                    LogUtils.log("buildMultiFileParam: key: " + param.key + " value: " + fileName);
                 } else {
-                    Util.log("NetUtils", "buildMultiFileParam: key: "
+                    LogUtils.log("NetUtils", "buildMultiFileParam: key: "
                             + (param.key != null ? param.key : "null")
                             + " file: "
                             + (param.file != null ? param.file.getName() : "null"));

@@ -1,4 +1,4 @@
-package cn.com.dareway.dwlibrary.netutils.okhttp;
+package cn.com.dareway.dwlibrary.netutils.httputils;
 
 import java.util.List;
 

@@ -5,7 +5,7 @@ import java.io.File;
 import java.io.InputStream;
 import java.util.HashMap;
 
-import cn.com.dareway.dwlibrary.netutils.okhttp.HttpCallBack;
+import cn.com.dareway.dwlibrary.netutils.httputils.HttpCallBack;
 import okhttp3.Call;
 
 /**

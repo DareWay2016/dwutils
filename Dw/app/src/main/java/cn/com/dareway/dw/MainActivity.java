@@ -10,9 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 import cn.com.dareway.dwlibrary.netutils.factory.CookieCallBack;
-import cn.com.dareway.dwlibrary.netutils.okhttp.CookieEntity;
-import cn.com.dareway.dwlibrary.netutils.okhttp.HttpCallBack;
-import cn.com.dareway.dwlibrary.netutils.okhttp.OkClient;
+import cn.com.dareway.dwlibrary.netutils.httputils.CookieEntity;
+import cn.com.dareway.dwlibrary.netutils.httputils.HttpCallBack;
+import cn.com.dareway.dwlibrary.netutils.httputils.DWHttpClient;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -25,7 +25,7 @@ public class MainActivity extends AppCompatActivity {
         HashMap <String,String> paras=new HashMap<>();
             paras.put("username","ggg");
         paras.put("password","123");
-        OkClient.setCookieJar(null, new CookieCallBack() {
+        DWHttpClient.setCookieJar(null, new CookieCallBack() {
             @Override
             public void getCookies(List<CookieEntity> entities) {
                 for (CookieEntity c:entities
@@ -36,8 +36,8 @@ public class MainActivity extends AppCompatActivity {
         });
         Map<String,String> header=new HashMap<>();
         header.put("aa","cccc");
-        OkClient.setHeader(header);
-        OkClient.doHttpPost("http://10.1.83.78:8080/moas/common/login","aa", paras, new HttpCallBack<String>() {
+        DWHttpClient.setHeader(header);
+        DWHttpClient.doHttpPost("http://10.1.83.78:8080/moas/common/login","aa", paras, new HttpCallBack<String>() {
             @Override
             public void onFailure(String reason) {
                 Log.d(TAG, "onFailure: "+reason);
@@ -60,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
 
-        OkClient.doHttpPost("http://10.1.83.78:8080/moas/common/login",null, paras, new HttpCallBack<String>() {
+        DWHttpClient.doHttpPost("http://10.1.83.78:8080/moas/common/login",null, paras, new HttpCallBack<String>() {
             @Override
             public void onFailure(String reason) {
                 Log.d(TAG, "onFailure: "+reason);
@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode==KeyEvent.KEYCODE_BACK){
-            OkClient.cancelCall();
+            DWHttpClient.cancelCall();
         }
         return true;
     }

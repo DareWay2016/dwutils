@@ -12,14 +12,22 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import cn.com.dareway.dwlibrary.netutils.CertTool;
 import cn.com.dareway.dwlibrary.netutils.GsonResolver;
 import cn.com.dareway.dwlibrary.netutils.Util;
+import cn.com.dareway.dwlibrary.netutils.factory.CookieCallBack;
 import cn.com.dareway.dwlibrary.netutils.factory.NetHttpClient;
 import okhttp3.Call;
 import okhttp3.Callback;
+import okhttp3.Cookie;
+import okhttp3.CookieJar;
 import okhttp3.FormBody;
+import okhttp3.HttpUrl;
 import okhttp3.Interceptor;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -36,57 +44,103 @@ import okhttp3.ResponseBody;
  * 使用OkHttp的版本为 okhttp:3.3.1
  */
 
-public class OkClient implements NetHttpClient {
+public class OkClient {
 
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
-    protected OkHttpClient client;
-    protected GsonResolver mResolver; //用来对返回的字符串进行JSon转换
-    private int mBufferSize = 2048;
+    private static OkHttpClient client;
+    protected static GsonResolver mResolver; //用来对返回的字符串进行JSon转换
+    private static int mBufferSize = 2048;
     public static boolean DEBUG = true;
-    protected int connectTimeOut = 20;
-    private Handler handler = new Handler(Looper.getMainLooper());
-    private Object ret;
-    private ArrayList<Call> calls;
+    protected static int connectTimeOut = 20, writeTimeOut = 20, readTimeOut = 20;
+    private static Handler handler = new Handler(Looper.getMainLooper());
+    private static Object ret;
+    private static ArrayList<Call> calls;
+    private static InputStream cert = null;
+    private static CookieJar cookieJar;
+    private static Map<String, String> headers;
 
-    public void  getCalls (ArrayList<Call> calls){
-            this.calls=calls;
+    public static void cancelCall() {
+        if (calls != null) {
+            for (Call c :
+                    calls) {
+                if (c != null) {
+                    c.cancel();
+                }
+            }
+
+            calls.clear();
+        }
     }
 
 
-    public OkClient init() {
-        calls=new ArrayList<>();
+    public static void init(InputStream certInputStream, int connectTime, int writeTime, int readTime) {
+        cert = certInputStream;
+        calls = new ArrayList<>();
+        client = null;
+
+        connectTimeOut = connectTime;
+        writeTimeOut = writeTime;
+        readTimeOut = readTime;
         mResolver = new GsonResolver();
-        client = new OkHttpClient.Builder().connectTimeout(connectTimeOut, TimeUnit.SECONDS)
-                .addNetworkInterceptor(new Interceptor() {
-                    @Override
-                    public Response intercept(Chain chain) throws IOException {
-                        Response response = chain.proceed(chain.request());
-                        ResponseBody body = new ForwardResponseBody(response.body());
-                        return response.newBuilder()
-                                .body(body)
-                                .build();
-                    }
-                }).build();
+        if (client == null) {
+            OkHttpClient.Builder httpsBuilder = new OkHttpClient.Builder().addNetworkInterceptor(new Interceptor() {
+                @Override
+                public Response intercept(Chain chain) throws IOException {
+                    Response response = chain.proceed(chain.request());
+                    ResponseBody body = new ForwardResponseBody(response.body());
+                    return response.newBuilder()
+                            .body(body)
+                            .build();
+                }
+            });
+            if (cookieJar != null) {
+                httpsBuilder.cookieJar(cookieJar);
+            }
+            if (connectTimeOut > 0) {
+                httpsBuilder.connectTimeout(connectTimeOut, TimeUnit.SECONDS);
+            }
+            if (readTimeOut > 0) {
+                httpsBuilder.readTimeout(readTimeOut, TimeUnit.SECONDS);
+            }
+            if (writeTimeOut > 0) {
+                httpsBuilder.writeTimeout(writeTimeOut, TimeUnit.SECONDS);
+            }
 
-        return this;
+
+            if (cert != null) {
+
+                client = CertTool.setCertificates(httpsBuilder, cert);
+            } else {
+                client = httpsBuilder.build();
+            }
+        }
+
     }
 
-    @Override
-    public NetHttpClient setCertInputStream(InputStream certInputStream) {
+    public static void setHeader(Map<String, String> header) {
+        headers = header;
+    }
+
+    public static void init(OkHttpClient httpClient) {
+        client = httpClient;
+    }
+
+    public static NetHttpClient setCertInputStream(InputStream certInputStream) {
         return null;
     }
 
     /**
      * Post 异步请求 提交键值对
      *
-     * @param url      请求地址
-     * @param paras    请求参数
-     * @param callBack 回调接口
-     * @param <T>      如需返回String，可将泛型T指定为String类型
+     * @param url        请求地址
+     * @param headerName 获取的header的name
+     * @param paras      请求参数
+     * @param callBack   回调接口
+     * @param <T>        如需返回String，可将泛型T指定为String类型
      */
 
-    @Override
-    public <T> Call doHttpPost(String url, HashMap<String, String> paras, HttpCallBack<T> callBack) {
+
+    public static <T> Call doHttpPost(String url, String headerName, HashMap<String, String> paras, HttpCallBack<T> callBack) {
 
         if (!Util.isNotNull(callBack)) {
             //不能为空
@@ -101,13 +155,20 @@ public class OkClient implements NetHttpClient {
             builder.add(key, paras.get(key));
         }
         RequestBody formBody = builder.build();
-        Request request = new Request.Builder()
+        Request.Builder requestBuilder = new Request.Builder()
                 .url(url)
-                .post(formBody)
-                .build();
+                .post(formBody);
+        if (headers != null && headers.size() > 0) {
+            Set<String> headerKeys = headers.keySet();
+            for (String key : headerKeys
+                    ) {
+                requestBuilder = requestBuilder.addHeader(key, headers.get(key));
+            }
+        }
+        Request request = requestBuilder.build();
 
 
-       return AsyncRequset(request, callBack);
+        return AsyncRequset(request, headerName, callBack);
     }
 
 
@@ -115,13 +176,14 @@ public class OkClient implements NetHttpClient {
      * Post 异步请求 json字符串
      *
      * @param url
+     * @param headerName 获取的header的name
      * @param json
      * @param callBack
      * @param <T>
      */
 
-    @Override
-    public <T> Call doHttpPost(String url, String json, HttpCallBack<T> callBack) {
+
+    public static <T> Call doHttpPost(String url, String headerName, String json, HttpCallBack<T> callBack) {
 
         if (!Util.isNotNull(callBack)) {
             //不能为空
@@ -130,23 +192,96 @@ public class OkClient implements NetHttpClient {
         final HttpCallBack<T> resCallBack = callBack;
 
         RequestBody body = RequestBody.create(JSON, json);
-        Request request = new Request.Builder()
+        Request.Builder requestBuilder = new Request.Builder()
                 .url(url)
-                .post(body)
-                .build();
-      return   AsyncRequset(request, resCallBack);
+                .post(body);
+        if (headers != null && headers.size() > 0) {
+            Set<String> headerKeys = headers.keySet();
+            for (String key : headerKeys
+                    ) {
+                requestBuilder = requestBuilder.addHeader(key, headers.get(key));
+            }
+        }
+        Request request = requestBuilder.build();
+        return AsyncRequset(request, headerName, resCallBack);
 
+    }
+
+    /**
+     * 设置cookies
+     * @param cookie
+     * @param callback
+     */
+    public static void setCookieJar(final List<CookieEntity> cookie, final CookieCallBack callback) {
+        cookieJar = new CookieJar() {
+            @Override
+            public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
+                List<CookieEntity> ces = new ArrayList<>();
+                for (Cookie c : cookies) {
+                    CookieEntity ce = new CookieEntity(c.name(), c.value(), c.expiresAt(),
+                            c.domain(), c.path(), c.secure(), c.httpOnly(), c.hostOnly());
+                    ces.add(ce);
+                }
+                callback.getCookies(ces);
+
+            }
+
+            @Override
+            public List<Cookie> loadForRequest(HttpUrl url) {
+                List<Cookie> cookies = new ArrayList<>();
+                if (cookie != null && cookie.size() > 0) {
+                    for (CookieEntity ce : cookie
+                            ) {
+
+                       /*
+                       String name, String value, long expiresAt, String domain, String path,
+      boolean secure, boolean httpOnly, boolean hostOnly
+                        */
+                        Cookie.Builder b = new Cookie.Builder();
+                        if (ce.getName() != null && !"".equals(ce.getName())) {
+                            b = b.name(ce.getName());
+                        }
+                        if (ce.getValue() != null && !"".equals(ce.getValue())) {
+                            b = b.value(ce.getValue());
+                        }
+                        if (ce.getExpiresAt() > 0) {
+                            b = b.expiresAt(ce.getExpiresAt());
+                        }
+                        if (ce.getDomain() != null && !"".equals(ce.getDomain())) {
+                            b = b.domain(ce.getDomain());
+                        }
+                        if (ce.getPath() != null && !"".equals(ce.getPath())) {
+                            b = b.path(ce.getPath());
+                        }
+                        if (ce.isSecure() == true) {
+                            b = b.secure();
+                        }
+                        if (ce.isHostOnly() == true) {
+                            b = b.hostOnlyDomain(ce.getDomain());
+                        }
+                        if (ce.isHttpOnly() == true) {
+                            b = b.httpOnly();
+                        }
+                        Cookie c = b.build();
+                        cookies.add(c);
+                    }
+                }
+                return cookies;
+            }
+        };
+        init(cert, connectTimeOut, writeTimeOut, readTimeOut);
     }
 
     /**
      * Get 异步请求
      *
      * @param url
+     * @param headerName 获取的header的name
      * @param callBack
      * @param <T>
      */
-    @Override
-    public <T> Call doHttpGet(String url, HttpCallBack<T> callBack) {
+
+    public static <T> Call doHttpGet(String url, String headerName, HttpCallBack<T> callBack) {
 
         if (!Util.isNotNull(callBack)) {
             //不能为空
@@ -155,22 +290,32 @@ public class OkClient implements NetHttpClient {
 
         final HttpCallBack<T> resCallBack = callBack;
 
-        Request request = new Request.Builder().url(url).build();
-        return AsyncRequset(request, resCallBack);
+        Request.Builder requestBuilder = new Request.Builder()
+                .url(url);
+        if (headers != null && headers.size() > 0) {
+            Set<String> headerKeys = headers.keySet();
+            for (String key : headerKeys
+                    ) {
+                requestBuilder = requestBuilder.addHeader(key, headers.get(key));
+            }
+        }
+        Request request = requestBuilder.build();
+        return AsyncRequset(request, headerName, resCallBack);
     }
 
 
     /**
      * 异步上传文件 以提交Form表单的形式上传文件
      *
-     * @param url      上传文件的接口地址url 如upload.php
-     * @param key      Form表单中的name属相 <inputtype="file" name="pic"></>
-     * @param file     需要上传的文件
-     * @param callBack 回调接口
-     * @param <T>      泛型参数
+     * @param url        上传文件的接口地址url 如upload.php
+     * @param headerName 获取的header的name
+     * @param key        Form表单中的name属相 <inputtype="file" name="pic"></>
+     * @param file       需要上传的文件
+     * @param callBack   回调接口
+     * @param <T>        泛型参数
      */
-    @Override
-    public <T> Call uploadAsync(String url, String key, File file, HttpCallBack<T> callBack) {
+
+    public static <T> Call uploadAsync(String url, String headerName, String key, File file, HttpCallBack<T> callBack) {
 
         //  uploadAsync(url, null, callback, new IOParam(key, file));
         IOParam ioParam = new IOParam(key, file);
@@ -181,7 +326,15 @@ public class OkClient implements NetHttpClient {
         // In this we proxy the ForwardRequestBody to support Progress
         builder.post(new ForwardRequestBody(body));
 
-        Request request = builder.build();
+        Request.Builder requestBuilder = new Request.Builder();
+        if (headers != null && headers.size() > 0) {
+            Set<String> headerKeys = headers.keySet();
+            for (String keys : headerKeys
+                    ) {
+                requestBuilder = requestBuilder.addHeader(keys, headers.get(keys));
+            }
+        }
+        Request request = requestBuilder.build();
         if (callBack != null) {
             RequestBody requestBody = request.body();
             if (requestBody instanceof ForwardRequestBody) {
@@ -192,7 +345,7 @@ public class OkClient implements NetHttpClient {
             return null;
         }
 
-        return AsyncRequset(request, callBack);
+        return AsyncRequset(request, headerName, callBack);
 
     }
 
@@ -200,18 +353,27 @@ public class OkClient implements NetHttpClient {
     /**
      * 异步下载文件
      *
-     * @param url      下载的文件的url地址
-     * @param fileStr  下载到本地的路径
-     * @param callBack 回调接口
+     * @param url        下载的文件的url地址
+     * @param headerName 获取的header的name
+     * @param fileStr    下载到本地的路径
+     * @param callBack   回调接口
      */
 
-    @Override
-    public <T> Call downloadAsync(String url, String fileStr, final HttpCallBack<File> callBack) {
+
+    public static <T> Call downloadAsync(String url, final String headerName, String fileStr, final HttpCallBack<File> callBack) {
         Call call = null;
         Request.Builder builder = new Request.Builder();
         builder.url(url);
         builder.get();
-        final Request request = builder.build();
+        Request.Builder requestBuilder = new Request.Builder();
+        if (headers != null && headers.size() > 0) {
+            Set<String> headerKeys = headers.keySet();
+            for (String keys : headerKeys
+                    ) {
+                requestBuilder = requestBuilder.addHeader(keys, headers.get(keys));
+            }
+        }
+        final Request request = requestBuilder.build();
         final File file = new File(fileStr);
         try {
             // On before crete stream, we need make new file
@@ -223,18 +385,20 @@ public class OkClient implements NetHttpClient {
                 return null;
             }
 
+            if (client == null) {
+                init(cert, connectTimeOut, writeTimeOut, readTimeOut);
+            }
             call = client.newCall(request);
             calls.add(call);
             call.enqueue(new Callback() {
 
                 @Override
                 public void onFailure(Call call, IOException e) {
-                    if(call.isCanceled())
-                    {
+                    if (call.isCanceled()) {
                         calls.remove(call);
-                    }else {
+                    } else {
 
-                            call.cancel();
+                        call.cancel();
                         calls.remove(call);
                         handler.post(new Runnable() {
                             @Override
@@ -251,7 +415,9 @@ public class OkClient implements NetHttpClient {
                 public void onResponse(Call call, final Response response) throws IOException {
                     call.cancel();
                     calls.remove(call);
-
+                    if (headerName != null && !"".equals(headerName)) {
+                        callBack.onHeader(response.headers(headerName));
+                    }
                     InputStream in = null;
                     byte[] buf = new byte[mBufferSize];
                     try {
@@ -297,10 +463,20 @@ public class OkClient implements NetHttpClient {
         return call;
     }
 
-    @Override
-    public OkClient connectTimeOut(int connectTimeOut) {
-        this.connectTimeOut = connectTimeOut;
-        return this;
+
+    public static void connectTimeOut(int time) {
+        connectTimeOut = time;
+
+    }
+
+    public static void writerTimeOut(int time) {
+        writeTimeOut = time;
+
+    }
+
+    public static void readTimeOut(int time) {
+        readTimeOut = time;
+
     }
 
 
@@ -311,28 +487,35 @@ public class OkClient implements NetHttpClient {
      * @param callBack 请求后的回调接口
      * @param <T>
      */
-    private <T> Call AsyncRequset(Request request, final HttpCallBack<T> callBack) {
+    private static <T> Call AsyncRequset(Request request, final String headerName, final HttpCallBack<T> callBack) {
+        if (client == null) {
+            init(cert, connectTimeOut, writeTimeOut, readTimeOut);
+        }
+
 
         Call call = client.newCall(request);
+        if (calls == null) {
+            calls = new ArrayList<>();
+        }
         calls.add(call);
         call.enqueue(new Callback() {
 
             @Override
             public void onFailure(Call call, IOException e) {
-                    if(call.isCanceled()) {
-                        Util.log("onFailure" + e.toString());
-                        calls.remove(call);
-                    }else {
-                        call.cancel();
-                        calls.remove(call);
-                        Util.log("onFailure" + e.toString());
-                        handler.post(new Runnable() {
-                            @Override
-                            public void run() {
-                                callBack.onFailure("请求失败！");
-                            }
-                        });
-                    }
+                if (call.isCanceled()) {
+                    Util.log("onFailure" + e.toString());
+                    calls.remove(call);
+                } else {
+                    call.cancel();
+                    calls.remove(call);
+                    Util.log("onFailure" + e.toString());
+                    handler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            callBack.onFailure("请求失败！");
+                        }
+                    });
+                }
 
             }
 
@@ -341,6 +524,9 @@ public class OkClient implements NetHttpClient {
                 call.cancel();
                 calls.remove(call);
                 Util.log("onResponse");
+                if (headerName != null && !"".equals(headerName)) {
+                    callBack.onHeader(response.headers(headerName));
+                }
                 try {
                     ret = null;
 
@@ -381,7 +567,7 @@ public class OkClient implements NetHttpClient {
      * @return
      */
 
-    private RequestBody createMultipartBody(IOParam[] IOParams) {
+    private static RequestBody createMultipartBody(IOParam[] IOParams) {
         MultipartBody.Builder builder = new MultipartBody.Builder();
         builder.setType(MultipartBody.FORM);
         //builder = buildMultipartBody(builder);
@@ -412,7 +598,7 @@ public class OkClient implements NetHttpClient {
      * @param responseBody
      * @param callback
      */
-    private void bindResponseProgressCallback(RequestBody requestBody, ResponseBody responseBody, HttpCallBack<?> callback) {
+    private static void bindResponseProgressCallback(RequestBody requestBody, ResponseBody responseBody, HttpCallBack<?> callback) {
         if (requestBody instanceof ForwardRequestBody) {
             if (((ForwardRequestBody) requestBody).getListener() != null) {
                 return;

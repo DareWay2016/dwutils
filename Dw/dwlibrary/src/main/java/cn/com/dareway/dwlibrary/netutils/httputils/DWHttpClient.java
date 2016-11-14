@@ -158,11 +158,11 @@ public class DWHttpClient {
      */
 
 
-    public static <T> Call doHttpPost(String url, String headerName, HashMap<String, String> paras, HttpCallBack<T> callBack) {
+    public static <T> void doHttpPost(String url, String headerName, HashMap<String, String> paras, HttpCallBack<T> callBack) {
 
         if (!FileUtils.isNotNull(callBack)) {
             //不能为空
-            return null;
+            return ;
         }
         final HttpCallBack<T> resCallBack = callBack;
         FormBody.Builder builder = new FormBody.Builder();
@@ -186,7 +186,7 @@ public class DWHttpClient {
         Request request = requestBuilder.build();
 
 
-        return AsyncRequset(request, headerName, callBack);
+         AsyncRequset(request, headerName, callBack);
     }
 
 
@@ -201,11 +201,11 @@ public class DWHttpClient {
      */
 
 
-    public static <T> Call doHttpPost(String url, String headerName, String json, HttpCallBack<T> callBack) {
+    public static <T> void doHttpPost(String url, String headerName, String json, HttpCallBack<T> callBack) {
 
         if (!FileUtils.isNotNull(callBack)) {
             //不能为空
-            return null;
+            return ;
         }
         final HttpCallBack<T> resCallBack = callBack;
 
@@ -221,7 +221,7 @@ public class DWHttpClient {
             }
         }
         Request request = requestBuilder.build();
-        return AsyncRequset(request, headerName, resCallBack);
+         AsyncRequset(request, headerName, resCallBack);
 
     }
 
@@ -299,11 +299,11 @@ public class DWHttpClient {
      * @param <T>
      */
 
-    public static <T> Call doHttpGet(String url, String headerName, HttpCallBack<T> callBack) {
+    public static <T> void doHttpGet(String url, String headerName, HttpCallBack<T> callBack) {
 
         if (!FileUtils.isNotNull(callBack)) {
             //不能为空
-            return null;
+            return ;
         }
 
         final HttpCallBack<T> resCallBack = callBack;
@@ -318,7 +318,7 @@ public class DWHttpClient {
             }
         }
         Request request = requestBuilder.build();
-        return AsyncRequset(request, headerName, resCallBack);
+         AsyncRequset(request, headerName, resCallBack);
     }
 
 
@@ -333,7 +333,7 @@ public class DWHttpClient {
      * @param <T>        泛型参数
      */
 
-    public static <T> Call uploadAsync(String url, String headerName, String key, File file, HttpCallBack<T> callBack) {
+    public static <T> void uploadAsync(String url, String headerName, String key, File file, HttpCallBack<T> callBack) {
 
         //  uploadAsync(url, null, callback, new IOParam(key, file));
         IOParam ioParam = new IOParam(key, file);
@@ -360,10 +360,10 @@ public class DWHttpClient {
             }
         } else {
 
-            return null;
+            return ;
         }
 
-        return AsyncRequset(request, headerName, callBack);
+         AsyncRequset(request, headerName, callBack);
 
     }
 
@@ -378,7 +378,7 @@ public class DWHttpClient {
      */
 
 
-    public static <T> Call downloadAsync(String url, final String headerName, String fileStr, final HttpCallBack<File> callBack) {
+    public static <T> void downloadAsync(String url, final String headerName, String fileStr, final HttpCallBack<File> callBack) {
         Call call = null;
         Request.Builder builder = new Request.Builder();
         builder.url(url);
@@ -400,7 +400,7 @@ public class DWHttpClient {
             final FileOutputStream out = new FileOutputStream(file);
             if (!FileUtils.isNotNull(callBack)) {
                 //不能为空
-                return null;
+                return ;
             }
 
             if (client == null) {
@@ -478,7 +478,7 @@ public class DWHttpClient {
             e.printStackTrace();
             callBack.onFailure("下载失败！");
         }
-        return call;
+
     }
 
     /**
@@ -516,7 +516,7 @@ public class DWHttpClient {
      * @param callBack 请求后的回调接口
      * @param <T>
      */
-    private static <T> Call AsyncRequset(Request request, final String headerName, final HttpCallBack<T> callBack) {
+    private static <T> void AsyncRequset(Request request, final String headerName, final HttpCallBack<T> callBack) {
         if (client == null) {
             init(cert, connectTimeOut, writeTimeOut, readTimeOut);
         }
@@ -585,7 +585,7 @@ public class DWHttpClient {
                 }
             }
         });
-        return call;
+
     }
 
 
